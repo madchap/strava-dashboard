@@ -1,4 +1,6 @@
-from flask import Flask, render_template, request
+#!/usr/bin/env python3
+
+from flask import Flask, render_template, request, url_for, redirect
 import webbrowser
 import plotly
 import plotly.graph_objs as go
@@ -37,81 +39,70 @@ def create_plot(feature):
 
     return graphJSON
 
-def open_browser(te, url):
-    print("before waiting browser")
-    webbrowser.open(url)
-    print("after opening browser")
-    #try:
-    #    code = request.args.get('code')
-    #    print(f"My code is {code}")
-    #    te.set()
-    #except Exception as e:
-    #    print(str(e))
+def authenticated():
+    try:
+        client.token_expires_at
+    except AttributeError:
+        return False
+    return client.token_expires_at is not None
 
 @app.route('/')
 def index():
-    try:
-        print(f"Do I have a token?", client.access_token)
-        feature = 'Bar'
-        bar = create_plot(feature)
-    except exc.Fault:
-        print("Need to authenticate.")
-        auth_dance()
+    if not authenticated(): return start_auth('/')
+    check_token_expiration()
+
+    feature = 'Bar'
+    bar = create_plot(feature)
     
     return render_template('index.html', plot=bar)
 
 
 @app.route('/bar', methods=['GET', 'POST'])
 def change_features():
+    if not authenticated(): return start_auth('/bar')
+    check_token_expiration()
+
     feature = request.args['selected']
     graphJSON = create_plot(feature)
 
     return graphJSON
 
-@app.route('/auth', methods=['GET'])
-def auth_dance():
-    # te = threading.Event()
-    try:
-        expire = client.token_expires_at
-        print(f"I expire at {expire}")
-        if time.time() > expire:
-            print("I have expired! Need a refresher.")
-            refresh_response = client.refresh_access_token(client_id=_creds.client_id,
-                                                        client_secret=_creds.client_secret)
-            
-            client.access_token = refresh_response['access_token']
-            client.refresh_token = refresh_response['refresh_token']
-            client.token_expires_at = refresh_response['expires_at']
-    except:
-        url = client.authorization_url(client_id=_creds.client_id, redirect_uri='http://localhost:5000/auth')
-        print("Starting authorization process.")
+@app.route('/start_auth', methods=['GET'])
+def start_auth(b=None):
+    url = client.authorization_url(client_id=_creds.client_id, redirect_uri='http://localhost:5000/finish_auth?return_to=' + b)
+    return redirect(url, code=302)
 
-        # while not (te.isSet()):
-       #      browser_thread = threading.Thread(name='browser', target=open_browser, args=(te, url))
-      #       browser_thread.start()
-# 
-#             print("Waiting for authz..")
-#             done = te.wait()
-#             if done:
-#                 print("Done waiting. Moving on. Could get token code here?")
-#             else:
-#                 print("Whatever.")
-#
-        webbrowser.open(url)
-        code = request.args.get('code')
-        print(f"My code is {code}")
-        token_response = client.exchange_code_for_token(client_id=_creds.client_id,
-                                                    client_secret=_creds.client_secret,
-                                                    code=code)
-        access_token = token_response['access_token']
-        refresh_token = token_response['refresh_token']
-        expires_at = token_response['expires_at']
+def check_token_expiration():
+    expire = client.token_expires_at
+    print(f"I expire at {expire}")
+    if time.time() > expire:
+        print("I have expired! Need a refresher.")
+        refresh_response = client.refresh_access_token(client_id=_creds.client_id,
+                                                    client_secret=_creds.client_secret)
+        
+        client.access_token = refresh_response['access_token']
+        client.refresh_token = refresh_response['refresh_token']
+        client.token_expires_at = refresh_response['expires_at']
 
-        client.access_token = access_token
-        client.refresh_token = refresh_token
-        client.token_expires_at = expires_at
+@app.route('/finish_auth', methods=['GET'])
+def finish_auth():
+    code = request.args.get('code')
+    print(f"My code is {code}")
+    token_response = client.exchange_code_for_token(client_id=_creds.client_id,
+                                                client_secret=_creds.client_secret,
+                                                code=code)
+    access_token = token_response['access_token']
+    refresh_token = token_response['refresh_token']
+    expires_at = token_response['expires_at']
 
-    return 'Return to your original tab, you\'re now authorized.'
+    client.access_token = access_token
+    client.refresh_token = refresh_token
+    client.token_expires_at = expires_at
+
+    return_to = request.args.get('return_to')
+    return redirect('/no_return_to' if return_to is None else return_to, code=302)
+
+    #return 'Return to your original tab, you\'re now authorized.'
 
 @app.route('/logout', methods=['GET'])
 def logout():
