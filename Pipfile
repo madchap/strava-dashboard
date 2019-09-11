@@ -5,6 +5,7 @@ verify_ssl = true
 
 [dev-packages]
 pylint = "*"
+autopep8 = "*"
 
 [packages]
 flask = "*"
@@ -14,7 +15,6 @@ numpy = "*"
 requests-oauthlib = "*"
 requests = "*"
 stravalib = "*"
-webbrowser = "*"
 
 [requires]
 python_version = "3.7"

@@ -1,7 +1,9 @@
 from stravalib import Client
 import pandas as pd
+from functools import lru_cache
 
 
+@lru_cache(maxsize=32)
 def get_strava_some_activities_data(client):
     activities = client.get_activities(limit=100)
     data_of_interest = [
